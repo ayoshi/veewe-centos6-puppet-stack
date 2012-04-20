@@ -1,8 +1,8 @@
 Veewee::Session.declare({
-  :cpu_count => '1', :memory_size=> '384',
+  :cpu_count => '1', :memory_size=> '512',
   :disk_size => '10140', :disk_format => 'VDI', :hostiocache => 'off',
   :os_type_id => 'RedHat_64',
-  :iso_file => "CentOS-6.0-x86_64-bin-DVD1.iso", :iso_src => "http://be.mirror.eurid.eu/centos/6.0/isos/x86_64/CentOS-6.0-x86_64-bin-DVD1.iso", :iso_md5 => "7c148e0a1b330186adef66ee3e2d433d", :iso_download_timeout => 1000,
+  :iso_file => "CentOS-6.2-x86_64-bin-DVD1.iso", :iso_src => "http://be.mirror.eurid.eu/centos/6.0/isos/x86_64/CentOS-6.2-x86_64-bin-DVD1.iso", :iso_md5 => "26fdf8c5a787a674f3219a3554b131ca", :iso_download_timeout => 1000,
   :iso_download_instructions => "We can not download the ISO , you need to download it yourself and put it in the iso directory\n"+
   "- URL: http://isoredirect.centos.org/centos/6/isos/x86_64/ ",
   :boot_wait => "10", :boot_cmd_sequence => [

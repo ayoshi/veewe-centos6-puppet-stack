@@ -1,4 +1,7 @@
 # Veewee Definitions
+
+Based on original package by:
+
 ### Maintainer: [Mark Stanislav](mailto: mark.stanislav@gmail.com "E-Mail Mark Stanislav") ###
 ### Repository: [https://github.com/mstanislav/Veewee-Definitions](https://github.com/mstanislav/Veewee-Definitions "Mark Stanislav's Veewee Definitions Repository") ###
 - - -

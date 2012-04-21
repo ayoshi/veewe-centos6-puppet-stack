@@ -1,4 +1,4 @@
-## Configuration Parameters
+# Configuration Parameters
 MYSQL_PASSWORD="password"
 RABBIT_USER="mcollective"
 RABBIT_PASSWORD="password"
@@ -37,27 +37,33 @@ hostname puppet.${DOMAIN}
 
 # Puppet Labs repositories ( dependancies, product )
 rpm -ivh http://yum.puppetlabs.com/el/6/products/x86_64/puppetlabs-release-6-1.noarch.rpm
-# Foreman repository ( stable )
-rpm -ivh http://yum.theforeman.org/stable/RPMS/foreman-release-1-1.noarch.rpm
-# EPEL repository - not really nescessary - since all puppet
-# dependancies are in PuppetLabs repo anyway
+# EPEL repository 
 rpm -ivh http://download.fedoraproject.org/pub/epel/6/x86_64/epel-release-6-5.noarch.rpm
 
-## Installation of majority of stack packages
+# Installation of majority of stack packages
+yum -y install git
 yum -y install rubygems ruby-devel rubygem-stomp
 yum -y install httpd httpd-devel mod_ssl
 yum -y install mysql mysql-server mysql-devel
+yum -y install libxml2 libxml2-devel libxslt libxslt-devel
 yum -y install libcurl-devel openssl-devel openssl098e tcl tk unixODBC unixODBC-devel augeas
-yum -y install rubygem-rest-client rubygem-json rubygem-mime-types
+yum -y install libvirt libvirt-devel
 
-## Installation of stack gems
-gem install --no-rdoc --no-ri puppet passenger rack mysql net-ping
+# To keep in line with vagrant standart
+gem install --no-rdoc --no-ri chef
+
+# Installation of stack gems
+gem install --no-rdoc --no-ri rest-client json mime-types
+gem install --no-rdoc --no-ri -v 3.0.10 passenger
+gem install --no-rdoc --no-ri stomp  
+gem install --no-rdoc --no-ri puppet rack mysql net-ping
 gem install --no-rdoc --no-ri -v 3.0.10 rails activerecord
+gem install --no-rdoc --no-ri bundle
 
 #Acquire puppet version for later use
 PUPPET_VERSION=$(puppet --version)
 
-## Deploy required Puppet user, files, and directories
+# Deploy required Puppet user, files, and directories
 adduser puppet
 
 mkdir -p /etc/puppet/{manifests,modules}
@@ -69,10 +75,11 @@ chown puppet:puppet /var/lib/puppet/{bucket,yaml,rrd,server_data,reports}
 cp /usr/lib/ruby/gems/1.8/gems/puppet-${PUPPET_VERSION}/ext/rack/files/config.ru /usr/share/puppet/rack/puppetmasterd/config.ru
 chown puppet:puppet /usr/share/puppet/rack/puppetmasterd/config.ru
 
-## Install Foreman
-yum install -y foreman
+# Install Foreman
+mkdir -p /usr/share/foreman
+git clone https://github.com/theforeman/foreman.git -b develop /usr/share/foreman
 
-## mCollective & Plugins
+# mCollective & Plugins
 yum -y install mcollective mcollective-common mcollective-client
 
 cd /usr/libexec/mcollective/mcollective/application
@@ -103,13 +110,13 @@ wget https://raw.github.com/phobos182/mcollective-plugins/master/agent/yum/yum.d
 cd /usr/libexec/mcollective/mcollective/facts/
 wget https://raw.github.com/puppetlabs/mcollective-plugins/master/facts/facter/facter_facts.rb
 
-## Fix ODBC requirement for Erlang - seems to be not nescessary in 14B
+# Fix ODBC requirement for Erlang - seems to be not nescessary in 14B
 #ln -s /usr/lib64/libodbc.so.2 /usr/lib64/libodbc.so.1
 
-## Install Erlang
+# Install Erlang
 yum -y install erlang
 
-## Install RabbitMQ & Plugins
+# Install RabbitMQ & Plugins
 yum -y install rabbitmq-server
 
 RABBITMQ_SERVER_VERSION=`rpm -q --qf '%{VERSION}' rabbitmq-server`
@@ -120,15 +127,15 @@ wget http://www.rabbitmq.com/releases/plugins/v${RABBITMQ_SERVER_VERSION}/rabbit
 chkconfig rabbitmq-server on
 service rabbitmq-server start
 
-## Configure RabbitMQ user/privileges
+# Configure RabbitMQ user/privileges
 rabbitmqctl add_user ${RABBIT_USER} ${RABBIT_PASSWORD}
 rabbitmqctl set_permissions ${RABBIT_USER} ".*" ".*" ".*"
 rabbitmqctl delete_user guest
 
-## Install Apache Passenger module
+# Install Apache Passenger module
 passenger-install-apache2-module -a
 
-## Configuration files for mCollective
+# Configuration files for mCollective
 cat > /etc/mcollective/server.cfg << EOF
 topicprefix = /topic/
 main_collective = mcollective
@@ -170,12 +177,12 @@ plugin.stomp.password = $RABBIT_PASSWORD
 factsource = facter
 EOF
 
-## Configure MySQL
+# Configure MySQL
 chkconfig mysqld on && service mysqld start
 mysql -u root -e "CREATE DATABASE puppet;"
 mysql -u root -e "GRANT ALL PRIVILEGES ON puppet.* TO puppet@localhost IDENTIFIED BY '${MYSQL_PASSWORD}';"
 
-## Puppet configuration
+# Puppet configuration
 cat > /etc/puppet/puppet.conf << EOF
 [main]
     logdir = /var/log/puppet
@@ -205,7 +212,7 @@ cat > /etc/puppet/puppet.conf << EOF
     dbsocket = /var/lib/mysql/mysql.sock
 EOF
 
-## Foreman configuration files
+# Foreman configuration files
 cat > /usr/share/foreman/config/database.yml << EOF
 production:
   adapter: mysql
@@ -239,7 +246,9 @@ production:
     authentication: :none
 EOF
 
+
 # Foreman report for Puppet
+# https://raw.github.com/theforeman/puppet-foreman/master/templates/foreman-report.rb.erb
 cat > /usr/lib/ruby/gems/1.8/gems/puppet-${PUPPET_VERSION}/lib/puppet/reports/foreman.rb << EOF
 \$foreman_url="https://foreman.$DOMAIN:443"
 
@@ -269,7 +278,7 @@ Puppet::Reports.register_report(:foreman) do
 end
 EOF
 
-## Apache configuration files
+# Apache configuration files
 cat > /etc/httpd/conf.d/puppet.conf << EOF
 Listen 8140
 <VirtualHost *:8140>
@@ -329,11 +338,11 @@ AddType application/x-pkcs7-crl .crl
 </VirtualHost>
 EOF
 
-## Remove stock Apache configuration files
+# Remove stock Apache configuration files
 rm -f /etc/httpd/conf.d/ssl.conf
 rm -f /etc/httpd/conf.d/welcome.conf
 
-## IPTables configuration
+# IPTables configuration
 cat > /etc/sysconfig/iptables << "EOF"
 # Firewall configuration written by system-config-firewall
 # Manual customization of this file is not recommended.
@@ -354,31 +363,37 @@ cat > /etc/sysconfig/iptables << "EOF"
 COMMIT
 EOF
 
-## Enable IPTables ruleset
+# Enable IPTables ruleset
 service iptables restart
 
-## Set Foreman symlinks
-#ln -sf /usr/share/foreman/config/database.yml /etc/foreman/database.yml
-#ln -sf /usr/share/foreman/config/settings.yaml /etc/foreman/settings.yaml
-#ln -sf /usr/share/foreman/config/email.yaml /etc/foreman/email.yaml
+# Set Foreman symlinks 
+mkdir -p /etc/foreman
+ln -sf /usr/share/foreman/config/database.yml /etc/foreman/database.yml
+ln -sf /usr/share/foreman/config/settings.yaml /etc/foreman/settings.yaml
+ln -sf /usr/share/foreman/config/email.yaml /etc/foreman/email.yaml
 
-## Enable mCollective
+# Enable mCollective
 chkconfig mcollective on
 service mcollective start
 
-## Generate Puppet master CA
+# Generate Puppet master CA
 puppet cert --generate puppet.${DOMAIN} 
-
-## Enable Apache
-chkconfig httpd on
-service httpd start
 
 # Rake Foreman
 cd /usr/share/foreman
+bundle install --system --without postgresql development
 RAILS_ENV=production rake db:migrate
 
-## Execute Puppet agent
+# Enable Apache
+chkconfig httpd on
+service httpd start
+
+# Work around
+# http://projects.reductivelabs.com/issues/2244
+mkdir -p /etc/puppet/modules/dummy_module/lib
+
+# Execute Puppet agent
 puppet agent -t
 
-## Finished
+# Finished
 exit

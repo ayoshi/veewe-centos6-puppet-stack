@@ -319,7 +319,7 @@ AddType application/x-x509-ca-cert .crt
 AddType application/x-pkcs7-crl .crl
 
 <VirtualHost *:443>  
-    ServerName foreman.DOMAIN_PH
+    ServerName foreman.${DOMAIN}
 
     RailsAutoDetect On
     DocumentRoot /usr/share/foreman/public

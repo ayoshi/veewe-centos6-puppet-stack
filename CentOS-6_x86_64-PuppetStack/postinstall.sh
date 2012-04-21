@@ -381,7 +381,7 @@ puppet cert --generate puppet.${DOMAIN}
 
 # Rake Foreman
 cd /usr/share/foreman
-bundle install --system --without postgresql development
+bundle install --path vendor/cache --without postgresql development
 RAILS_ENV=production rake db:migrate
 
 # Enable Apache

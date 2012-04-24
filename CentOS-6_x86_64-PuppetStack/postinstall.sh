@@ -15,7 +15,7 @@ DOMAIN="local"
 setenforce permissive
 
 # For minimal Centos 6.2 CD
-yum -y install git make gcc gcc-c++ openldap-devel sqlite-devel wget zlib-devel
+yum -y install git make gcc gcc-c++ openldap-devel sqlite-devel wget zlib-devel kernel-devel
 yum -y upgrade
 
 # Installing vagrant keys

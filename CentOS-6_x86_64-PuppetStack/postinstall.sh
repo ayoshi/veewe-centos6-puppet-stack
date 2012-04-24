@@ -1,3 +1,8 @@
+### Fix - log rotation for foreman/puppet/rabbitmq
+### Fix - foreman reporting doesn't seem to work
+### Report Cleanup - foreman , puppet , rabbitmq
+### monit passenger, rabbitmq
+
 # Configuration Parameters
 MYSQL_PASSWORD="password"
 RABBIT_USER="mcollective"
@@ -6,10 +11,12 @@ MCOLLECTIVE_PSK="mcollectivePSKmcollective"
 FOREMAN_EMAIL="root@test.local"
 DOMAIN="local"
 
-# Initial CentOS system clean-up + upgrades
-yum -y erase wireless-tools gtk2 libX11 hicolor-icon-theme avahi freetype bitstream-vera-fonts
+# Disable SELinux
+setenforce permissive
+
+# For minimal Centos 6.2 CD
+yum -y install git make gcc gcc-c++ openldap-devel sqlite-devel wget zlib-devel
 yum -y upgrade
-yum -y clean all
 
 # Installing vagrant keys
 mkdir /home/vagrant/.ssh
@@ -32,8 +39,8 @@ sed -i "s/^.*requiretty/#Defaults requiretty/" /etc/sudoers
 
 # Configure hostname
 echo -e "127.0.0.1 puppet.${DOMAIN} puppet foreman.${DOMAIN} foreman localhost" > /etc/hosts
-echo -e "NETWORKING=yes\nHOSTNAME=puppet.${DOMAIN}" > /etc/sysconfig/network
-hostname puppet.${DOMAIN}
+echo -e "NETWORKING=yes\nHOSTNAME=puppet" > /etc/sysconfig/network
+hostname puppet
 
 # Puppet Labs repositories ( dependancies, product )
 rpm -ivh http://yum.puppetlabs.com/el/6/products/x86_64/puppetlabs-release-6-1.noarch.rpm
@@ -41,7 +48,6 @@ rpm -ivh http://yum.puppetlabs.com/el/6/products/x86_64/puppetlabs-release-6-1.n
 rpm -ivh http://download.fedoraproject.org/pub/epel/6/x86_64/epel-release-6-5.noarch.rpm
 
 # Installation of majority of stack packages
-yum -y install git
 yum -y install rubygems ruby-devel rubygem-stomp
 yum -y install httpd httpd-devel mod_ssl
 yum -y install mysql mysql-server mysql-devel
@@ -77,7 +83,7 @@ chown puppet:puppet /usr/share/puppet/rack/puppetmasterd/config.ru
 
 # Install Foreman
 mkdir -p /usr/share/foreman
-git clone https://github.com/theforeman/foreman.git -b develop /usr/share/foreman
+git clone https://github.com/theforeman/foreman.git /usr/share/foreman
 
 # mCollective & Plugins
 yum -y install mcollective mcollective-common mcollective-client
@@ -381,8 +387,9 @@ puppet cert --generate puppet.${DOMAIN}
 
 # Rake Foreman
 cd /usr/share/foreman
-bundle install --path vendor/cache --without postgresql development
+bundle install --path vendor/bundle --without postgresql development
 RAILS_ENV=production rake db:migrate
+chmod 666 log/production
 
 # Enable Apache
 chkconfig httpd on
@@ -394,6 +401,10 @@ mkdir -p /etc/puppet/modules/dummy_module/lib
 
 # Execute Puppet agent
 puppet agent -t
+
+#Clean-up
+yum -y clean all
+dd if=/dev/zero of=/tmp/clean || rm /tmp/clean
 
 # Finished
 exit

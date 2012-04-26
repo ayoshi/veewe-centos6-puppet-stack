@@ -293,6 +293,8 @@ PassengerStatThrottleRate 120
 RackAutoDetect Off
 RailsAutoDetect Off
 
+Listen 8140
+
 <VirtualHost *:8140>
     SSLEngine on
     SSLProtocol -ALL +SSLv3 +TLSv1

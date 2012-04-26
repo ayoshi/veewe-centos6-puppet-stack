@@ -1,7 +1,6 @@
-### Fix - log rotation for foreman/puppet/rabbitmq
-### Fix - foreman reporting doesn't seem to work
 ### Report Cleanup - foreman , puppet , rabbitmq
 ### monit passenger, rabbitmq
+### Make foreman work as ENC
 
 # Configuration Parameters
 MYSQL_PASSWORD="password"
@@ -11,11 +10,14 @@ MCOLLECTIVE_PSK="mcollectivePSKmcollective"
 FOREMAN_EMAIL="root@test.local"
 DOMAIN="local"
 
+date > /etc/vagrant_box_build_time
+
 # Disable SELinux
 setenforce permissive
 
 # For minimal Centos 6.2 CD
-yum -y install git make gcc gcc-c++ openldap-devel sqlite-devel wget zlib-devel kernel-devel
+yum -y install gcc make gcc-c++ ruby kernel-devel-`uname -r` zlib-devel \
+       openssl-devel readline-devel sqlite-devel perl git wget
 yum -y upgrade
 
 # Installing vagrant keys
@@ -46,44 +48,31 @@ hostname puppet
 rpm -ivh http://yum.puppetlabs.com/el/6/products/x86_64/puppetlabs-release-6-1.noarch.rpm
 # EPEL repository 
 rpm -ivh http://download.fedoraproject.org/pub/epel/6/x86_64/epel-release-6-5.noarch.rpm
+# Foreman repo
+rpm -ivh http://yum.theforeman.org/stable/RPMS/foreman-release-1-1.noarch.rpm
 
 # Installation of majority of stack packages
-yum -y install rubygems ruby-devel rubygem-stomp
+yum -y install rubygems ruby-devel rubygem-stomp ruby-mysql rubygem-rack
 yum -y install httpd httpd-devel mod_ssl
 yum -y install mysql mysql-server mysql-devel
 yum -y install libxml2 libxml2-devel libxslt libxslt-devel
 yum -y install libcurl-devel openssl-devel openssl098e tcl tk unixODBC unixODBC-devel augeas
-yum -y install libvirt libvirt-devel
+yum -y install libvirt libvirt-devel 
 
+yum -y install puppet
 # To keep in line with vagrant standart
 gem install --no-rdoc --no-ri chef
 
 # Installation of stack gems
-gem install --no-rdoc --no-ri rest-client json mime-types
 gem install --no-rdoc --no-ri -v 3.0.10 passenger
-gem install --no-rdoc --no-ri stomp  
-gem install --no-rdoc --no-ri puppet rack mysql net-ping
 gem install --no-rdoc --no-ri -v 3.0.10 rails activerecord
 gem install --no-rdoc --no-ri bundle
 
 #Acquire puppet version for later use
 PUPPET_VERSION=$(puppet --version)
 
-# Deploy required Puppet user, files, and directories
-adduser puppet
-
-mkdir -p /etc/puppet/{manifests,modules}
-mkdir -p /usr/share/puppet/rack/puppetmasterd/{public,tmp}
-
-mkdir -p /var/lib/puppet/{bucket,yaml,rrd,server_data,reports}
-chown puppet:puppet /var/lib/puppet/{bucket,yaml,rrd,server_data,reports}
-
-cp /usr/lib/ruby/gems/1.8/gems/puppet-${PUPPET_VERSION}/ext/rack/files/config.ru /usr/share/puppet/rack/puppetmasterd/config.ru
-chown puppet:puppet /usr/share/puppet/rack/puppetmasterd/config.ru
-
 # Install Foreman
-mkdir -p /usr/share/foreman
-git clone https://github.com/theforeman/foreman.git /usr/share/foreman
+yum -y install foreman
 
 # mCollective & Plugins
 yum -y install mcollective mcollective-common mcollective-client
@@ -116,12 +105,6 @@ wget https://raw.github.com/phobos182/mcollective-plugins/master/agent/yum/yum.d
 cd /usr/libexec/mcollective/mcollective/facts/
 wget https://raw.github.com/puppetlabs/mcollective-plugins/master/facts/facter/facter_facts.rb
 
-# Fix ODBC requirement for Erlang - seems to be not nescessary in 14B
-#ln -s /usr/lib64/libodbc.so.2 /usr/lib64/libodbc.so.1
-
-# Install Erlang
-yum -y install erlang
-
 # Install RabbitMQ & Plugins
 yum -y install rabbitmq-server
 
@@ -140,6 +123,12 @@ rabbitmqctl delete_user guest
 
 # Install Apache Passenger module
 passenger-install-apache2-module -a
+
+# Configure puppet as rack application
+mkdir -p /etc/puppet/rack/{public,tmp}
+cp /usr/share/puppet/ext/rack/files/config.ru /etc/puppet/rack/config.ru
+chown puppet:puppet /etc/puppet/rack/config.ru
+
 
 # Configuration files for mCollective
 cat > /etc/mcollective/server.cfg << EOF
@@ -219,7 +208,7 @@ cat > /etc/puppet/puppet.conf << EOF
 EOF
 
 # Foreman configuration files
-cat > /usr/share/foreman/config/database.yml << EOF
+cat > /etc/foreman/database.yml << EOF
 production:
   adapter: mysql
   database: puppet
@@ -229,7 +218,7 @@ production:
   socket: "/var/lib/mysql/mysql.sock"
 EOF
 
-cat > /usr/share/foreman/config/settings.yaml << EOF
+cat > /etc/foreman/settings.yaml << EOF
 --- 
 :modulepath: /etc/puppet/modules/
 :tftppath: tftp/
@@ -242,7 +231,7 @@ cat > /usr/share/foreman/config/settings.yaml << EOF
 :foreman_url: foreman.$DOMAIN
 EOF
 
-cat > /usr/share/foreman/config/email.yaml << EOF
+cat > /etc/foreman/email.yaml << EOF
 production:
   delivery_method: :smtp
   smtp_settings:
@@ -255,11 +244,19 @@ EOF
 
 # Foreman report for Puppet
 # https://raw.github.com/theforeman/puppet-foreman/master/templates/foreman-report.rb.erb
-cat > /usr/lib/ruby/gems/1.8/gems/puppet-${PUPPET_VERSION}/lib/puppet/reports/foreman.rb << EOF
+#cat > /usr/lib/ruby/gems/1.8/gems/puppet-${PUPPET_VERSION}/lib/puppet/reports/foreman.rb << EOF
+cat > /usr/lib/ruby/site_ruby/1.8/puppet/reports/foreman.rb << EOF
+
+# copy this file to your report dir - e.g. /usr/lib/ruby/1.8/puppet/reports/
+# add this report in your puppetmaster reports - e.g, in your puppet.conf add:
+# reports=log, foreman # (or any other reports you want)
+
+# URL of your Foreman installation
 \$foreman_url="https://foreman.$DOMAIN:443"
 
 require 'puppet'
 require 'net/http'
+require 'net/https'
 require 'uri'
 
 Puppet::Reports.register_report(:foreman) do
@@ -268,40 +265,57 @@ Puppet::Reports.register_report(:foreman) do
 
     def process
       begin
-        uri = URI.parse(\$foreman_url)
+        uri = URI.parse($foreman_url)
         http = Net::HTTP.new(uri.host, uri.port)
         if uri.scheme == 'https' then
           http.use_ssl = true
           http.verify_mode = OpenSSL::SSL::VERIFY_NONE
         end
-        req = Net::HTTP::Post.new("/reports/create?format=yml")
+        req = Net::HTTP::Post.new("#{uri.path}/reports/create?format=yml")
         req.set_form_data({'report' => to_yaml})
         response = http.request(req)
       rescue Exception => e
-        raise Puppet::Error, "Could not send report to Foreman at #{\$foreman_url}/reports/create?format=yml: #{e}"
+        raise Puppet::Error, "Could not send report to Foreman at #{$foreman_url}/reports/create?format=yml: #{e}"
       end
     end
 end
+
 EOF
 
 # Apache configuration files
 cat > /etc/httpd/conf.d/puppet.conf << EOF
-Listen 8140
+
+PassengerHighPerformance on
+PassengerMaxPoolSize 12
+PassengerPoolIdleTime 1500
+# PassengerMaxRequests 1000
+PassengerStatThrottleRate 120
+RackAutoDetect Off
+RailsAutoDetect Off
+
 <VirtualHost *:8140>
     SSLEngine on
-    SSLCipherSuite SSLv2:-LOW:-EXPORT:RC4+RSA
+    SSLProtocol -ALL +SSLv3 +TLSv1
+    SSLCipherSuite ALL:!ADH:RC4+RSA:+HIGH:+MEDIUM:-LOW:-SSLv2:-EXP
+
     SSLCertificateFile      /var/lib/puppet/ssl/certs/puppet.${DOMAIN}.pem
     SSLCertificateKeyFile   /var/lib/puppet/ssl/private_keys/puppet.${DOMAIN}.pem
     SSLCertificateChainFile /var/lib/puppet/ssl/ca/ca_crt.pem
     SSLCACertificateFile    /var/lib/puppet/ssl/ca/ca_crt.pem
     SSLCARevocationFile     /var/lib/puppet/ssl/ca/ca_crl.pem
+
     SSLVerifyClient optional
     SSLVerifyDepth  1
     SSLOptions +StdEnvVars
 
+    RequestHeader set X-SSL-Subject %{SSL_CLIENT_S_DN}e
+    RequestHeader set X-Client-DN %{SSL_CLIENT_S_DN}e
+    RequestHeader set X-Client-Verify %{SSL_CLIENT_VERIFY}e
+
+    DocumentRoot /etc/puppet/rack/public/
+    RackBaseURI /
     RackAutoDetect On
-    DocumentRoot /usr/share/puppet/rack/puppetmasterd/public/
-    <Directory /usr/share/puppet/rack/puppetmasterd/>
+    <Directory /etc/puppet/rack/>
         Options None
         AllowOverride None
         Order allow,deny
@@ -372,32 +386,28 @@ EOF
 # Enable IPTables ruleset
 service iptables restart
 
-# Set Foreman symlinks 
-mkdir -p /etc/foreman
-ln -sf /usr/share/foreman/config/database.yml /etc/foreman/database.yml
-ln -sf /usr/share/foreman/config/settings.yaml /etc/foreman/settings.yaml
-ln -sf /usr/share/foreman/config/email.yaml /etc/foreman/email.yaml
-
 # Enable mCollective
 chkconfig mcollective on
 service mcollective start
 
 # Generate Puppet master CA
+find $(puppet master --configprint ssldir) -name $(puppet master --configprint certname) -delete
+#puppet cert --generate puppet.${DOMAIN} --dns_alt_names=puppet 
 puppet cert --generate puppet.${DOMAIN} 
 
 # Rake Foreman
 cd /usr/share/foreman
-bundle install --path vendor/bundle --without postgresql development
 RAILS_ENV=production rake db:migrate
-chmod 666 log/production
+
+# Work around http://projects.reductivelabs.com/issues/2244
+mkdir -p /etc/puppet/modules/dummy_module/lib
+# Needed too it seems
+mkdir -p /etc/puppet/manifests
 
 # Enable Apache
 chkconfig httpd on
 service httpd start
 
-# Work around
-# http://projects.reductivelabs.com/issues/2244
-mkdir -p /etc/puppet/modules/dummy_module/lib
 
 # Execute Puppet agent
 puppet agent -t
